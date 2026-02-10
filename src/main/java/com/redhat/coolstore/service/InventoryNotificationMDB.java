@@ -3,12 +3,11 @@ package com.redhat.coolstore.service;
 import com.redhat.coolstore.model.Order;
 import com.redhat.coolstore.utils.Transformers;
 
-import javax.inject.Inject;
+import jakarta.inject.Inject;
 import javax.jms.*;
 import javax.naming.Context;
 import javax.naming.InitialContext;
 import javax.naming.NamingException;
-import javax.rmi.PortableRemoteObject;
 import java.util.Hashtable;
 
 public class InventoryNotificationMDB implements MessageListener {
@@ -54,10 +53,10 @@ public class InventoryNotificationMDB implements MessageListener {
 
     public void init() throws NamingException, JMSException {
         Context ctx = getInitialContext();
-        TopicConnectionFactory tconFactory = (TopicConnectionFactory) PortableRemoteObject.narrow(ctx.lookup(JMS_FACTORY), TopicConnectionFactory.class);
+        TopicConnectionFactory tconFactory = (TopicConnectionFactory) ctx.lookup(JMS_FACTORY);
         tcon = tconFactory.createTopicConnection();
         tsession = tcon.createTopicSession(false, Session.AUTO_ACKNOWLEDGE);
-        Topic topic = (Topic) PortableRemoteObject.narrow(ctx.lookup(TOPIC), Topic.class);
+        Topic topic = (Topic) ctx.lookup(TOPIC);
         tsubscriber = tsession.createSubscriber(topic);
         tsubscriber.setMessageListener(this);
         tcon.start();
