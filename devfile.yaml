@@ -4,59 +4,110 @@ metadata:
 components:
   - name: tools
     container:
-      image: quay.io/kanekoh/openjdk:main
-      cpuRequest: 1000m
-      memoryRequest: 12Gi
-      memoryLimit: 12Gi
+      image: registry.redhat.io/devspaces/udi-rhel9:latest
+      cpuRequest: 50m
+      cpuLimit: 1000m
+      memoryRequest: 4Gi
+      memoryLimit: 8Gi
       env:
         - name: HOME
           value: "/projects/home"
         - name: SSL_CERT_DIR
           value: /var/run/secrets/kubernetes.io/serviceaccount
-        - name: VSCODE_DEFAULT_WORKSPACE
-          value: /.code-workspace
-        - name: USE_JAVA21
-          value: 'true'
 events:
   postStart:
-  - configure-java-version
-  - enforce-provider-settings
+    - setup-extensions
 
 commands:
-  - id: configure-java-version
+  - id: setup-extensions
     exec:
-      component: tools
-      label: Configure Java Version to 21
+      component: dev-tools
       commandLine: |
-        bash -lc '
-          source /home/tooling/.sdkman/bin/sdkman-init.sh
-          sdk default java 21.0.5-tem
-        '
-      group:
-        kind: build
+        # ==========================================
+        # 設定エリア
+        # ==========================================
 
-  - id: enforce-provider-settings
-    exec:
-      component: tools
-      label: Enforce Konveyor provider-settings.yaml
-      commandLine: |
-        bash -lc '
-          set -euo pipefail
-          SRC="/provider-settings.yaml"
-          DST="/checode/remote/data/User/globalStorage/konveyor.konveyor/settings/provider-settings.yaml"
-          mkdir -p "$(dirname "$DST")"
-          if [[ ! -f "$SRC" ]]; then
-            echo "[enforce] template not found: $SRC" >&2
-            exit 1
+        # 1. Konveyor拡張機能の設定
+        # ※GitHubリリースに添付されている実際の.vsixファイル名に合わせて変更してください
+        KONVEYOR_VERSION="0.4.17"
+        KONVEYOR_VSIX_FILE="konveyor-${KONVEYOR_VERSION}.vsix" # 例: konveyor-0.4.17.vsix
+        KONVEYOR_VSIX_URL="https://github.com/konveyor/editor-extensions/releases/download/v${KONVEYOR_VERSION}/${KONVEYOR_VSIX_FILE}"
+        KONVEYOR_EXT_ID="konveyor.konveyor" # 実際の拡張機能ID
+
+        # 2. Red Hat Java拡張機能の設定
+        # Javaプラグインをインストールする場合は "true" に設定
+        INSTALL_JAVA="true"
+        JAVA_PUBLISHER="redhat"
+        JAVA_EXTENSION="java"
+        JAVA_VERSION="1.31.0" # 任意のバージョンに変更可能
+        JAVA_VSIX_URL="https://open-vsx.org/api/${JAVA_PUBLISHER}/${JAVA_EXTENSION}/${JAVA_VERSION}/file/${JAVA_PUBLISHER}.${JAVA_EXTENSION}-${JAVA_VERSION}.vsix"
+        JAVA_EXT_ID="redhat.java"
+
+        # 書き換え後の VS Code バージョン指定（この値まで制限をゆるくする）
+        TARGET_VSCODE_VERSION="^1.60.0"
+
+        # CLIコマンド（お使いのDev Spaces環境に合わせて変更してください。例: code, che-code など）
+        CODE_CMD="code"
+
+        # ==========================================
+        # 共通処理関数：ダウンロード → 書き換え → インストール
+        # ==========================================
+        install_patched_extension() {
+          local ext_url=$1
+          local ext_name=$2
+          local ext_id=$3
+
+          # 既にインストール済みの場合はスキップ
+          if $CODE_CMD --list-extensions | grep -i "$ext_id" > /dev/null; then
+            echo "✅ Extension $ext_id は既にインストールされています。スキップします。"
+            return 0
           fi
-          # バックアップ（存在時のみ）
-          [[ -f "$DST" ]] && cp -a "$DST" "${DST}.bak.$(date +%Y%m%d%H%M%S)" || true
-          # 強制置換
-          install -m 0644 "$SRC" "$DST"
-          # 読み取り専用化（実行中の手編集を抑止）
-          chmod 0444 "$DST"
-          echo "[enforce] replaced and set read-only -> $DST"
-        '
-      group:
-        kind: build
-        isDefault: true
+
+          echo "⬇️ $ext_name をダウンロード中... ($ext_url)"
+          local tmp_dir="/tmp/ext-workspace-$ext_name"
+          mkdir -p "$tmp_dir"
+          cd "$tmp_dir" || exit 1
+
+          # VSIXのダウンロード (-L でリダイレクトに追従)
+          curl -sSL -L "$ext_url" -o ext.zip
+          
+          if [ ! -f "ext.zip" ] || [ ! -s "ext.zip" ]; then
+              echo "❌ エラー: $ext_name のダウンロードに失敗しました。URLを確認してください。"
+              rm -rf "$tmp_dir"
+              return 1
+          fi
+
+          echo "📦 解凍して package.json を書き換えます..."
+          unzip -q ext.zip -d extracted
+          
+          # package.json の "vscode" バージョン制限を書き換え (sed を使用)
+          sed -i 's/"vscode":[ \t]*"[^"]*"/"vscode": "'$TARGET_VSCODE_VERSION'"/' extracted/extension/package.json
+          
+          echo "🗜️ VSIX 形式に再圧縮します..."
+          cd extracted
+          zip -qr ../modified.vsix *
+          cd ..
+          
+          echo "🚀 $ext_name をインストール中..."
+          $CODE_CMD --install-extension modified.vsix --force
+          
+          # 後片付け
+          rm -rf "$tmp_dir"
+          echo "✅ $ext_name のインストールが完了しました！"
+        }
+
+        # ==========================================
+        # メイン処理
+        # ==========================================
+
+        # 1. Red Hat Javaのインストール
+        if [ "$INSTALL_JAVA" = "true" ]; then
+          echo "=== Red Hat Java Extension のインストールを開始 ==="
+          install_patched_extension "$JAVA_VSIX_URL" "redhat-java" "$JAVA_EXT_ID"
+        fi
+
+        # 2. Konveyorのインストール
+        echo "=== Konveyor Extension のインストールを開始 ==="
+        install_patched_extension "$KONVEYOR_VSIX_URL" "konveyor" "$KONVEYOR_EXT_ID"
+
+        echo "🎉 すべての処理が完了しました！"
