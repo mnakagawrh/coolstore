@@ -1,11 +1,6 @@
 schemaVersion: 2.2.2
 metadata:
   name: openjdk-workspace
-attributes:
-  editorFreeFormAttributes:
-    extensions:
-      - redhat.java
-      - konveyor.konveyor-vscode-extension
 components:
   - name: tools
     container:
