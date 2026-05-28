@@ -21,7 +21,7 @@ events:
 commands:
   - id: setup-extensions
     exec:
-      component: dev-tools
+      component: tools
       commandLine: |
         # ==========================================
         # 設定エリア
