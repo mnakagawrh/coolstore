@@ -4,7 +4,7 @@ metadata:
 components:
   - name: tools
     container:
-      image: quay.io/kanekoh/openjdk:main
+      image: registry.redhat.io/devspaces/udi-rhel9:latest
       cpuRequest: 1000m
       memoryRequest: 12Gi
       memoryLimit: 12Gi
