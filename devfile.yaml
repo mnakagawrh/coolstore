@@ -1,6 +1,17 @@
 schemaVersion: 2.2.2
 metadata:
   name: openjdk-workspace
+
+attributes:
+  # 拡張機能のID (Publisher.ExtensionName) を指定します
+  .vscode/extensions.json: |
+    {
+      "recommendations": [
+        "redhat.mta-java",
+        "redhat.mta-vscode-extension",
+        "redhat.mta-core"
+      ]
+    }
 components:
   - name: tools
     container:
