@@ -15,7 +15,7 @@ components:
           value: "/projects/home"
         - name: SSL_CERT_DIR
           value: /var/run/secrets/kubernetes.io/serviceaccount
-        - name: USE_JAVA21
+        - name: USE_JAVA25
           value: 'true'
 events:
   postStart:
