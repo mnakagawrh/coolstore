@@ -31,7 +31,23 @@ export AUTH_RESOURCE=eap-app
 
 # Create keycloak.json from template
 echo "Keycloak設定を作成中..."
-envsubst < keycloak.template.json > src/main/resources/META-INF/resources/keycloak.json
+if command -v envsubst >/dev/null 2>&1; then
+    envsubst < keycloak.template.json > src/main/resources/META-INF/resources/keycloak.json
+else
+    python3 - <<'PY'
+import os
+from pathlib import Path
+
+template = Path("keycloak.template.json").read_text()
+template = template.replace("${AUTH_REALM}", os.environ["AUTH_REALM"])
+template = template.replace("${AUTH_SERVER_URL}", os.environ["AUTH_SERVER_URL"])
+template = template.replace("${AUTH_RESOURCE}", os.environ["AUTH_RESOURCE"])
+
+output = Path("src/main/resources/META-INF/resources/keycloak.json")
+output.parent.mkdir(parents=True, exist_ok=True)
+output.write_text(template)
+PY
+fi
 
 # Create BuildConfig
 echo "BuildConfigを作成中..."
